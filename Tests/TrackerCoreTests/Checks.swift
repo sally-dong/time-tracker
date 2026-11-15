@@ -20,7 +20,8 @@ enum Checks {
             ("Interrupted timer recovery", recovery),
             ("Editing and overlap validation", editing),
             ("Midnight and daylight saving totals", totals),
-            ("Persistence, backup, and damaged data", persistence)
+            ("Persistence, backup, and damaged data", persistence),
+            ("Including idle time", idle)
         ]
         for (name, test) in tests { try test(); print("PASS  \(name)") }
         print("\(tests.count) checks passed.")
@@ -82,6 +83,39 @@ enum Checks {
                                     start: day.addingTimeInterval(-3600), end: interval.end.addingTimeInterval(3600)),
                            now: interval.end.addingTimeInterval(3600))
         try check(data.duration(in: interval, now: interval.end) == 25 * 3600, "Totals must clip to the actual day")
+    }
+
+    static func idle() throws {
+        let at = { (seconds: Double) in start.addingTimeInterval(seconds) }
+        // Same project resumes: including the gap merges everything into one block.
+        var data = TrackerData()
+        data.start(at: at(0))
+        let first = data.active!.id
+        data.pause(at: at(600))
+        data.start(at: at(2400))
+        try data.includeIdleTime(after: first, until: at(2400), now: at(2401))
+        try data.includeIdleTime(after: first, until: at(2400), now: at(2401))
+        data.pause(at: at(3000))
+        try check(data.entries.map(\.duration) == [3000], "Included idle time must merge into one block")
+
+        // Something else already resumed: the earlier block extends up to it instead.
+        let other = Project(name: "Other", color: "green")
+        try data.saveProject(other)
+        data.start(at: at(4000))
+        let second = data.active!.id
+        data.pause(at: at(4600))
+        data.select(other.id, at: at(6000))
+        data.start(at: at(6000))
+        try data.includeIdleTime(after: second, until: at(6000), now: at(6001))
+        try check(data.entries.last?.end == at(6000) && data.active?.start == at(6000), "Gap must end where tracking resumed")
+
+        // A block added inside the gap must not be overlapped.
+        var gap = TrackerData()
+        gap.start(at: at(0))
+        let id = gap.active!.id
+        gap.pause(at: at(600))
+        try gap.saveEntry(TimeEntry(projectID: gap.selectedProjectID, start: at(1000), end: at(1200)), now: at(2000))
+        try expectFailure { try gap.includeIdleTime(after: id, until: at(2000), now: at(2000)) }
     }
 
     static func persistence() throws {

@@ -37,6 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         store = TrackerStore(preview: preview)
         store.openCalendar = { [weak self] in self?.showCalendar() }
         store.openProjects = { [weak self] in self?.showCalendar(addProject: true) }
+        store.askAboutIdle = { [weak self] away, project, answer in
+            // Deferred so the dialog's modal loop never runs inside a timer callback.
+            DispatchQueue.main.async { answer(self?.confirmIdleTime(away, project: project) ?? false) }
+        }
         makeMenu()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -110,8 +114,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showCalendar(); return true }
     func applicationWillTerminate(_ notification: Notification) { store?.pause() }
-    @objc private func sleeping() { store.pause(reason: "Paused when your Mac went to sleep.") }
-    @objc private func locked() { store.pause(reason: "Paused when your Mac locked or switched users.") }
+    // Stop at the last input rather than the lock itself, so time spent away
+    // before an automatic lock is not counted.
+    @objc private func sleeping() { store.pause(reason: "Paused when your Mac went to sleep.", at: store.lastInput) }
+    @objc private func locked() { store.pause(reason: "Paused when your Mac locked or switched users.", at: store.lastInput) }
+
+    /// The timer is already running again; this only decides whether the gap counts.
+    private func confirmIdleTime(_ away: TimeInterval, project: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "You were away for \(TimeFormat.short(away))"
+        alert.informativeText = "The timer paused when you went idle and has started again. Add the time you were away to \(project)?"
+        alert.addButton(withTitle: "Don’t Include")
+        alert.addButton(withTitle: "Include \(TimeFormat.short(away))")
+        alert.icon = NSImage(systemSymbolName: "cup.and.saucer", accessibilityDescription: nil)
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.level = .floating
+        return alert.runModal() == .alertSecondButtonReturn
+    }
     @objc private func waking() { store.refresh() }
     @objc private func openCalendar() { showCalendar() }
     @objc private func revealData() { store.revealData() }

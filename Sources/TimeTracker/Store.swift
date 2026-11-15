@@ -15,8 +15,17 @@ final class TrackerStore: ObservableObject {
     let preview: Bool
     private var loadFailed = false
     private var timer: Timer?
+    private var idleWatch: Timer?
+    private var idleBreak: (entryID: UUID, projectID: UUID, start: Date, stoppedAt: Date)?
+    /// `-IdleLimitSeconds 20` as a launch argument shortens the limit for testing.
+    private let idleLimit: TimeInterval = {
+        let override = UserDefaults.standard.double(forKey: "IdleLimitSeconds")
+        return override > 0 ? override : 15 * 60
+    }()
     var openCalendar: () -> Void = {}
     var openProjects: () -> Void = {}
+    /// Asks whether to keep time away from the computer: (duration, project name, answer).
+    var askAboutIdle: (TimeInterval, String, @escaping (Bool) -> Void) -> Void = { _, _, _ in }
 
     init(preview: Bool) {
         self.preview = preview
@@ -75,9 +84,8 @@ final class TrackerStore: ObservableObject {
     func select(_ id: UUID) {
         change { $0.select(id, at: Date()) }
     }
-    func pause(reason: String? = nil) {
+    func pause(reason: String? = nil, at date: Date = Date()) {
         guard isRunning else { return }
-        let date = Date()
         if change({ $0.pause(at: date) }) { notice = reason }
         else {
             // Stop counting even if a disk error prevents saving. Retain the finished
@@ -102,6 +110,7 @@ final class TrackerStore: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.now = Date()
+                if Self.idleTime >= self.idleLimit { self.stopForIdle(); return }
                 if let active = self.data.active, self.now.timeIntervalSince(active.checkpoint) >= 30 {
                     self.change { $0.active?.checkpoint = self.now }
                 }
@@ -110,6 +119,50 @@ final class TrackerStore: ObservableObject {
         timer.tolerance = 0.15
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    // MARK: Idle
+
+    /// Seconds since the last keyboard, mouse, or trackpad input. Needs no permissions.
+    static var idleTime: TimeInterval {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+    }
+    var lastInput: Date { Date().addingTimeInterval(-Self.idleTime) }
+
+    /// Stops the block at the moment input stopped, then waits for the user to return.
+    private func stopForIdle() {
+        guard let running = data.active else { return }
+        let start = max(running.start, lastInput)
+        pause(reason: "Paused at \(start.formatted(date: .omitted, time: .shortened)) while you were away.", at: start)
+        guard !isRunning else { return }
+        idleBreak = (running.id, running.projectID, start, Date())
+        let watch = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkForReturn() }
+        }
+        watch.tolerance = 0.5
+        RunLoop.main.add(watch, forMode: .common)
+        idleWatch = watch
+    }
+
+    private func checkForReturn() {
+        guard let away = idleBreak, !Self.screenLocked else { return }
+        let back = lastInput
+        guard back > away.stoppedAt else { return }
+        idleWatch?.invalidate(); idleWatch = nil; idleBreak = nil
+        if !isRunning { change { $0.start(at: back) } }
+        notice = nil
+        let resumed = data.active?.start ?? back
+        askAboutIdle(back.timeIntervalSince(away.start), project(away.projectID).name) { [weak self] include in
+            guard include, let self else { return }
+            self.change { try $0.includeIdleTime(after: away.entryID, until: resumed, now: Date()) }
+        }
+    }
+
+    /// True at the lock screen or while another user is active. Read directly from the
+    /// session so a missed lock or unlock notification can never leave the timer stuck.
+    private static var screenLocked: Bool {
+        let session = CGSessionCopyCurrentDictionary() as? [String: Any] ?? [:]
+        return session["CGSSessionScreenIsLocked"] as? Bool == true || session[kCGSessionOnConsoleKey] as? Bool == false
     }
 
     func configureLoginOnFirstLaunch() {

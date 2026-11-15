@@ -16,7 +16,8 @@ For daily use, keep the app in `~/Applications` or `/Applications` before openin
 - Click the timer in the menu bar to choose a project, start/pause, or open the calendar. The counter is today's total for the selected project, including earlier sessions.
 - Switching projects while running saves the old block and immediately starts the new project.
 - Closing the calendar leaves the menu bar app running. **Quit Time Tracker** stops the timer and exits.
-- The timer pauses on sleep, screen lock, and switching users. It stays paused when you return.
+- After 15 minutes without keyboard, mouse, or trackpad input, the timer stops at the moment you went idle. When you return, it starts again immediately and asks whether to include the time you were away. Including it joins the gap to the earlier block. This also applies if your Mac locks or sleeps after idling begins.
+- Otherwise the timer pauses on sleep, screen lock, and switching users, stopping at your last input rather than the lock itself. It stays paused when you return.
 - Navigate weeks using the arrows or Today. Scroll vertically through the 24-hour calendar.
 - Click an empty calendar slot or **Add time** to record missed time. Click an existing block to edit its project and dates/times or delete it. Saving an active block pauses the timer.
 - Time blocks cannot overlap or end in the future. Blocks spanning midnight appear on each relevant day; totals use actual elapsed time, including daylight saving transitions.
@@ -34,7 +35,7 @@ A running timer checkpoints every 30 seconds. After an unexpected shutdown, it r
 ./Scripts/check.sh
 ```
 
-Five focused checks cover project transitions, interruption recovery, editing validation, midnight/daylight saving totals, and file persistence. The tiny runner works with Apple's Command Line Tools without requiring a full Xcode installation. For a visual demo isolated from your real data and login settings:
+Six focused checks cover project transitions, interruption recovery, editing validation, midnight/daylight saving totals, file persistence, and including idle time. The tiny runner works with Apple's Command Line Tools without requiring a full Xcode installation. For a visual demo isolated from your real data and login settings:
 
 ```sh
 open "build/Time Tracker.app" --args --preview

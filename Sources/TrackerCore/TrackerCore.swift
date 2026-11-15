@@ -77,6 +77,22 @@ public struct TrackerData: Codable, Equatable {
         if wasRunning { start(at: date) }
     }
 
+    /// Folds an idle gap, from the end of `entryID` until `end`, back into tracked time.
+    /// When the session resumed at `end` is the same project, the two become one block.
+    public mutating func includeIdleTime(after entryID: UUID, until end: Date, now: Date) throws {
+        guard var entry = entries.first(where: { $0.id == entryID }), end > entry.end else { return }
+        guard !visibleEntries(at: now).contains(where: { $0.start < end && entry.end < $0.end }) else {
+            throw TrackerError.overlap
+        }
+        if let running = active, running.projectID == entry.projectID, running.start == end {
+            entries.removeAll { $0.id == entryID }
+            active?.start = entry.start
+        } else {
+            entry.end = end
+            try saveEntry(entry, now: now)
+        }
+    }
+
     /// Never count the time while the app was closed or the computer was off.
     public mutating func recoverInterruptedSession() {
         guard let running = active else { return }
