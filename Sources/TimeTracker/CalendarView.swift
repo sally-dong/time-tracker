@@ -36,7 +36,6 @@ struct CalendarView: View {
                     Circle().fill(store.isRunning ? Color.green : Color.secondary.opacity(0.5)).frame(width: 6, height: 6)
                     Text(store.isRunning ? "Tracking \(store.selectedProject.name)" : (store.notice ?? "Timer paused"))
                     Spacer()
-                    Text("Click an empty slot to add time").foregroundStyle(.tertiary)
                 }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20).frame(height: 34)
             }
         }
@@ -98,7 +97,6 @@ struct CalendarView: View {
                     Button("Approve in System Settings…") { SMAppService.openSystemSettingsLoginItems() }
                 }
                 Button("Reveal data file", action: store.revealData)
-                Button("Edit selected project…") { showNewProject = false; projectDraft = store.selectedProject }
                 Divider()
                 Button("Quit Time Tracker") { NSApplication.shared.terminate(nil) }
             } label: { Label("Settings", systemImage: "gearshape").font(.callout).foregroundStyle(.secondary) }

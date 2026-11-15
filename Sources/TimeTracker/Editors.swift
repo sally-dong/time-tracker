@@ -22,11 +22,7 @@ struct EntryEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(draft.existing ? "Edit time" : "Add time").font(.title2.weight(.semibold))
-                Text(draft.running ? "Saving this block will pause its timer." : "Choose a project and adjust the start and end time.")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
+            Text(draft.existing ? "Edit time" : "Add time").font(.title2.weight(.semibold))
             Form {
                 Picker("Project", selection: $draft.projectID) {
                     ForEach(store.data.projects) { Text($0.name).tag($0.id) }
