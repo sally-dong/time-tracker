@@ -1,52 +1,63 @@
+// Builds AppIcon.icns from Resources/AppIcon.png, a 1024px master with transparent
+// corners drawn on the macOS icon grid (824px plate inset 100px). The master is cropped
+// and re-masked from Resources/AppIcon-simple-source.png (the simplified illustration in use);
+// Resources/AppIcon-source.png is the original, more detailed illustration.
+// Usage: swift Scripts/MakeIcon.swift <output>.iconset  (writes <output>.icns beside it)
 import AppKit
 
 let directory = URL(fileURLWithPath: CommandLine.arguments[1])
+let masterURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    .deletingLastPathComponent().appendingPathComponent("Resources/AppIcon.png")
+guard let master = NSImage(contentsOf: masterURL)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
+      master.width == 1024, master.height == 1024 else {
+    fatalError("Resources/AppIcon.png must be a 1024x1024 PNG")
+}
+try? FileManager.default.removeItem(at: directory)
 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-for size in [16, 32, 128, 256, 512] {
+
+func png(_ pixels: Int) -> Data {
+    let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+    let context = NSGraphicsContext.current!.cgContext
+    context.interpolationQuality = .high
+    context.draw(master, in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+    NSGraphicsContext.restoreGraphicsState()
+    return bitmap.representation(using: .png, properties: [:])!
+}
+
+for points in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {
-        let pixels = size * scale
-        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        let context = NSGraphicsContext.current!.cgContext
-        context.scaleBy(x: CGFloat(pixels) / 512, y: CGFloat(pixels) / 512)
-        NSColor(calibratedRed: 0.15, green: 0.20, blue: 0.27, alpha: 1).setFill()
-        NSBezierPath(roundedRect: NSRect(x: 24, y: 24, width: 464, height: 464), xRadius: 110, yRadius: 110).fill()
-        NSColor(calibratedWhite: 0.98, alpha: 1).setStroke()
-        let ring = NSBezierPath(ovalIn: NSRect(x: 116, y: 100, width: 280, height: 280))
-        ring.lineWidth = 22; ring.stroke()
-        let hands = NSBezierPath()
-        hands.lineCapStyle = .round; hands.lineJoinStyle = .round; hands.lineWidth = 21
-        hands.move(to: NSPoint(x: 256, y: 333)); hands.line(to: NSPoint(x: 256, y: 240)); hands.line(to: NSPoint(x: 310, y: 208)); hands.stroke()
-        let crown = NSBezierPath(); crown.lineCapStyle = .round; crown.lineWidth = 20
-        crown.move(to: NSPoint(x: 231, y: 418)); crown.line(to: NSPoint(x: 281, y: 418)); crown.stroke()
-        NSColor(calibratedRed: 0.46, green: 0.83, blue: 0.68, alpha: 1).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 365, y: 338, width: 58, height: 58)).fill()
-        NSGraphicsContext.restoreGraphicsState()
-        let suffix = scale == 2 ? "@2x" : ""
-        try bitmap.representation(using: .png, properties: [:])!.write(to: directory.appendingPathComponent("icon_\(size)x\(size)\(suffix).png"))
+        let pixels = points * scale
+        let data = pixels == 1024 ? try Data(contentsOf: masterURL) : png(pixels)
+        try data.write(to: directory.appendingPathComponent("icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"))
     }
 }
 
-// ICNS embeds PNG representations directly; this avoids invoking an image
-// conversion service and keeps packaging usable with only Command Line Tools.
-func bigEndian(_ value: Int) -> Data {
-    var number = UInt32(value).bigEndian
-    return withUnsafeBytes(of: &number) { Data($0) }
+// iconutil ships with macOS (not Xcode) and writes each size in the format Finder expects.
+let iconutil = Process()
+iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
+iconutil.arguments = ["-c", "icns", directory.path, "-o", directory.deletingPathExtension().appendingPathExtension("icns").path]
+try iconutil.run()
+iconutil.waitUntilExit()
+guard iconutil.terminationStatus == 0 else { fatalError("iconutil failed") }
+
+// macOS 26 draws icns-only apps inside a grey plate at small sizes. Resources/AppIcon.icon
+// (Icon Composer format, art = the illustration's plate area unmasked) compiles to Assets.car,
+// which the system masks itself. actool ships with Xcode; without it the app falls back to the icns.
+// Writes <output>.assets/Assets.car beside the iconset.
+let assets = directory.deletingPathExtension().appendingPathExtension("assets")
+try? FileManager.default.removeItem(at: assets)
+try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+let actool = Process()
+actool.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+actool.arguments = ["actool", masterURL.deletingLastPathComponent().appendingPathComponent("AppIcon.icon").path,
+    "--compile", assets.path, "--platform", "macosx", "--minimum-deployment-target", "14.0",
+    "--app-icon", "AppIcon", "--output-partial-info-plist", assets.appendingPathComponent("partial.plist").path]
+actool.standardOutput = FileHandle.nullDevice
+if (try? actool.run()) != nil { actool.waitUntilExit() }
+if actool.terminationStatus != 0 || !FileManager.default.fileExists(atPath: assets.appendingPathComponent("Assets.car").path) {
+    FileHandle.standardError.write("warning: actool unavailable or failed; app will use AppIcon.icns only\n".data(using: .utf8)!)
 }
-let representations = [
-    ("icp4", "icon_16x16.png"), ("icp5", "icon_32x32.png"),
-    ("icp6", "icon_32x32@2x.png"), ("ic07", "icon_128x128.png"),
-    ("ic08", "icon_256x256.png"), ("ic09", "icon_512x512.png"),
-    ("ic10", "icon_512x512@2x.png")
-]
-var body = Data()
-for (type, filename) in representations {
-    let png = try Data(contentsOf: directory.appendingPathComponent(filename))
-    body.append(Data(type.utf8)); body.append(bigEndian(png.count + 8)); body.append(png)
-}
-var icon = Data("icns".utf8)
-icon.append(bigEndian(body.count + 8)); icon.append(body)
-try icon.write(to: directory.deletingPathExtension().appendingPathExtension("icns"))

@@ -11,6 +11,15 @@ open "build/Time Tracker.app"
 
 For daily use, keep the app in `~/Applications` or `/Applications` before opening it. On its first launch it registers to launch at login using Apple's `SMAppService`. If macOS requests approval, use **Settings → Approve in System Settings**. The same menu lets you turn launch at login off.
 
+## App icon
+
+The art is in `Resources/`: `AppIcon-simple-source.png` is in use; `AppIcon-source.png` is the original, more detailed version. The build makes two icons from the same crop of the 1254px art (x 75–1175, y 67–1167, which keeps the original margin above the progress ring):
+
+- `AppIcon.icon`: an Icon Composer file with one unmasked layer. Xcode's `actool` compiles it into `Assets.car`, which macOS 26 masks itself. Without Xcode the build skips it with a warning, and macOS 26 draws small icons inside a grey plate.
+- `AppIcon.png`: a 1024px master already masked to the macOS icon grid (824px plate, corners, shadow). `Scripts/MakeIcon.swift` resizes it into `AppIcon.icns` for macOS 14 and 15.
+
+To change the icon, regenerate both from the new art.
+
 ## Use
 
 - Click the timer in the menu bar to choose a project, start/pause, or open the calendar. The counter is today's total for the selected project, including earlier sessions.
