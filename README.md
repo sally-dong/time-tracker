@@ -11,6 +11,22 @@ open "build/Time Tracker.app"
 
 For daily use, keep the app in `~/Applications` or `/Applications` before opening it. On its first launch it registers to launch at login using Apple's `SMAppService`. If macOS requests approval, use **Settings → Approve in System Settings**. The same menu lets you turn launch at login off.
 
+## Release for download
+
+```sh
+./Scripts/release.sh
+```
+
+This builds a universal app (Apple silicon and Intel) and writes `build/release/TimeTracker-<version>.dmg`. The disk image shows the app beside an Applications shortcut. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist` for each release.
+
+By default the app is ad-hoc signed, and Gatekeeper blocks it on other Macs. To make it open normally after download, sign it with a Developer ID and notarize it. This requires the paid Apple Developer Program.
+
+1. Create a **Developer ID Application** certificate (Xcode → Settings → Accounts → Manage Certificates → + ).
+2. Store notary credentials once, using an [app-specific password](https://support.apple.com/102654):
+   `xcrun notarytool store-credentials TimeTrackerNotary --apple-id <email> --team-id <TEAMID>`
+3. Build, sign, notarize, and staple:
+   `DEVELOPER_ID="Developer ID Application: <Name> (<TEAMID>)" NOTARY_PROFILE=TimeTrackerNotary ./Scripts/release.sh`
+
 ## App icon
 
 The art is in `Resources/`: `AppIcon-simple-source.png` is in use; `AppIcon-source.png` is the original, more detailed version. The build makes two icons from the same crop of the 1254px art (x 75–1175, y 67–1167, which keeps the original margin above the progress ring):
