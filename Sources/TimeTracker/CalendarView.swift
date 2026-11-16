@@ -42,7 +42,6 @@ struct CalendarView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(item: $entryDraft) { draft in EntryEditor(draft: draft).environmentObject(store) }
         .sheet(item: $projectDraft) { project in ProjectEditor(project: project, isNew: showNewProject).environmentObject(store) }
-        .onReceive(NotificationCenter.default.publisher(for: .addTrackerProject)) { _ in newProject() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in store.refresh() }
         .alert("Time Tracker", isPresented: Binding(get: { store.error != nil && entryDraft == nil && projectDraft == nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }

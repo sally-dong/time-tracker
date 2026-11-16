@@ -16,11 +16,13 @@ enum TimeTrackerApp {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverDelegate {
     private var store: TrackerStore!
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var window: NSWindow?
+    private var outsideClickMonitor: Any?
+    private var menuSize: () -> NSSize = { .zero }
     private var subscriptions = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -36,7 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         store = TrackerStore(preview: preview)
         store.openCalendar = { [weak self] in self?.showCalendar() }
-        store.openProjects = { [weak self] in self?.showCalendar(addProject: true) }
         store.askAboutIdle = { [weak self] away, project, answer in
             // Deferred so the dialog's modal loop never runs inside a timer callback.
             DispatchQueue.main.async { answer(self?.confirmIdleTime(away, project: project) ?? false) }
@@ -49,8 +50,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             button.imagePosition = .imageLeading
         }
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 300, height: 340)
-        popover.contentViewController = NSHostingController(rootView: MenuView().environmentObject(store))
+        popover.delegate = self
+        let menu = NSHostingController(rootView: MenuView().environmentObject(store))
+        // The popover is sized explicitly in togglePopover. Letting SwiftUI resize it
+        // after it is shown moves its top edge, because macOS keeps the bottom fixed.
+        menu.sizingOptions = []
+        menuSize = { [menu] in menu.sizeThatFits(in: NSSize(width: 340, height: 2000)) }
+        popover.contentViewController = menu
+        // A message appearing while the popover is open changes its height; resize
+        // and re-anchor it so it stays attached to the menu bar.
+        store.$error.combineLatest(store.$notice).sink { [weak self] _, _ in
+            DispatchQueue.main.async { self?.fitPopover() }
+        }.store(in: &subscriptions)
         store.$now.combineLatest(store.$data).sink { [weak self] _, _ in
             DispatchQueue.main.async { self?.updateStatus() }
         }.store(in: &subscriptions)
@@ -82,11 +93,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if popover.isShown { popover.performClose(nil); return }
         store.refresh()
         guard let button = statusItem.button else { return }
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentSize = menuSize()
+        showPopover(below: button)
         popover.contentViewController?.view.window?.makeKey()
+        // As a menu bar accessory the app often is not active, so .transient alone
+        // misses clicks in other apps; close on any click outside the app instead.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            self?.popover.performClose(nil)
+        }
     }
 
-    func showCalendar(addProject: Bool = false) {
+    /// Anchors to the status item's full-height window rather than the button, which is
+    /// shorter than the menu bar on notched displays and would put the arrow inside it.
+    private func showPopover(below button: NSStatusBarButton) {
+        let anchor = button.window?.contentView ?? button
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
+    }
+
+    private func fitPopover() {
+        guard popover.isShown, let button = statusItem.button else { return }
+        let size = menuSize()
+        guard size != popover.contentSize else { return }
+        popover.contentSize = size
+        showPopover(below: button)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        if let monitor = outsideClickMonitor { NSEvent.removeMonitor(monitor); outsideClickMonitor = nil }
+    }
+
+    func showCalendar() {
         popover.performClose(nil)
         store.refresh()
         if window == nil {
@@ -105,9 +141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        if addProject {
-            DispatchQueue.main.async { NotificationCenter.default.post(name: .addTrackerProject, object: nil) }
-        }
     }
 
     func windowWillClose(_ notification: Notification) { NSApp.setActivationPolicy(.accessory) }
@@ -159,8 +192,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         windowItem.submenu = windowMenu; menu.addItem(windowItem)
         NSApp.mainMenu = menu
     }
-}
-
-extension Notification.Name {
-    static let addTrackerProject = Notification.Name("addTrackerProject")
 }

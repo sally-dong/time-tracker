@@ -1,4 +1,3 @@
-import ServiceManagement
 import SwiftUI
 import TrackerCore
 
@@ -11,15 +10,16 @@ struct MenuView: View {
                 Spacer()
                 Text(store.isRunning ? "Running" : "Paused").font(.caption).foregroundStyle(.secondary)
             }
-            VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .center) {
                 Text(TimeFormat.clock(store.todayTotal)).font(.system(size: 36, weight: .light, design: .rounded)).monospacedDigit()
-                Text("Today on \(store.selectedProject.name)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .lineLimit(1).layoutPriority(1)
+                Spacer(minLength: 8)
+                Picker("Project", selection: Binding(get: { store.data.selectedProjectID }, set: { store.select($0) })) {
+                    ForEach(store.data.projects) { project in
+                        HStack { ProjectDot(project: project); Text(project.name) }.tag(project.id)
+                    }
+                }.labelsHidden()
             }
-            Picker("Project", selection: Binding(get: { store.data.selectedProjectID }, set: { store.select($0) })) {
-                ForEach(store.data.projects) { project in
-                    HStack { ProjectDot(project: project); Text(project.name) }.tag(project.id)
-                }
-            }.labelsHidden().frame(maxWidth: .infinity)
             Button(action: store.toggle) {
                 Label(store.isRunning ? "Pause timer" : "Start timer", systemImage: store.isRunning ? "pause.fill" : "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 5)
@@ -35,20 +35,6 @@ struct MenuView: View {
                 Spacer()
                 Image(systemName: "arrow.up.right").foregroundStyle(.tertiary)
             }.contentShape(Rectangle()).onTapGesture(perform: store.openCalendar)
-            HStack {
-                Button("New project…", action: store.openProjects).buttonStyle(.plain).foregroundStyle(.secondary)
-                Spacer()
-                Menu {
-                    Toggle("Launch at login", isOn: Binding(get: { store.loginEnabled }, set: store.setLoginEnabled))
-                    if store.loginStatus == .requiresApproval {
-                        Button("Approve in System Settings…") { SMAppService.openSystemSettingsLoginItems() }
-                    }
-                    Button("Reveal data file", action: store.revealData)
-                    Divider()
-                    Button("Quit Time Tracker") { NSApplication.shared.terminate(nil) }
-                } label: { Image(systemName: "gearshape") }
-                .menuStyle(.borderlessButton).fixedSize().help("Settings")
-            }.font(.caption)
-        }.padding(20).frame(width: 300)
+        }.padding(20).frame(width: 340)
     }
 }

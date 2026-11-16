@@ -23,7 +23,6 @@ final class TrackerStore: ObservableObject {
         return override > 0 ? override : 15 * 60
     }()
     var openCalendar: () -> Void = {}
-    var openProjects: () -> Void = {}
     /// Asks whether to keep time away from the computer: (duration, project name, answer).
     var askAboutIdle: (TimeInterval, String, @escaping (Bool) -> Void) -> Void = { _, _, _ in }
 
