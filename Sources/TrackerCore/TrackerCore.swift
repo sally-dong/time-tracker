@@ -25,8 +25,8 @@ public struct RunningSession: Codable, Equatable {
     public var projectID: UUID
     public var start: Date
     public var checkpoint: Date
-    public var entry: TimeEntry {
-        TimeEntry(id: id, projectID: projectID, start: start, end: checkpoint)
+    public func entry(until end: Date) -> TimeEntry {
+        TimeEntry(id: id, projectID: projectID, start: start, end: end)
     }
 }
 
@@ -63,9 +63,7 @@ public struct TrackerData: Codable, Equatable {
 
     public mutating func pause(at date: Date) {
         guard let running = active else { return }
-        if date > running.start {
-            entries.append(TimeEntry(id: running.id, projectID: running.projectID, start: running.start, end: date))
-        }
+        if date > running.start { entries.append(running.entry(until: date)) }
         active = nil
     }
 
@@ -128,8 +126,7 @@ public struct TrackerData: Codable, Equatable {
 
     public func visibleEntries(at now: Date) -> [TimeEntry] {
         guard let running = active else { return entries }
-        return entries + [TimeEntry(id: running.id, projectID: running.projectID,
-                                    start: running.start, end: max(running.start, now))]
+        return entries + [running.entry(until: max(running.start, now))]
     }
 
     public func duration(in interval: DateInterval, projectID: UUID? = nil, now: Date) -> TimeInterval {

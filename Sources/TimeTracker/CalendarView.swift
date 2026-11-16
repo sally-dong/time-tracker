@@ -54,17 +54,14 @@ struct CalendarView: View {
                 Image(systemName: "timer").font(.title3).foregroundStyle(.secondary)
                 Text("Time Tracker").font(.headline)
             }.padding(.bottom, 30)
-            Text("TODAY").font(.system(size: 10, weight: .semibold)).tracking(1.5).foregroundStyle(.secondary)
+            SectionLabel("TODAY")
             Text(TimeFormat.clock(store.todayTotal)).font(.system(size: 31, weight: .light, design: .rounded)).monospacedDigit().padding(.top, 8)
             HStack(spacing: 7) { ProjectDot(project: store.selectedProject); Text(store.selectedProject.name).lineLimit(1) }
                 .font(.callout).foregroundStyle(.secondary).padding(.top, 7)
-            Button(action: store.toggle) {
-                Label(store.isRunning ? "Pause timer" : "Start timer", systemImage: store.isRunning ? "pause.fill" : "play.fill")
-                    .frame(maxWidth: .infinity).padding(.vertical, 5)
-            }.buttonStyle(.borderedProminent).tint(Palette.color(store.selectedProject.color)).controlSize(.large).padding(.top, 20)
+            TimerButton().padding(.top, 20)
             Divider().padding(.vertical, 24)
             HStack {
-                Text("PROJECTS").font(.system(size: 10, weight: .semibold)).tracking(1.4).foregroundStyle(.secondary)
+                SectionLabel("PROJECTS")
                 Spacer()
                 Button(action: newProject) { Image(systemName: "plus") }.buttonStyle(.plain).help("New project").accessibilityLabel("New project")
             }.padding(.bottom, 12)
@@ -83,7 +80,7 @@ struct CalendarView: View {
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                             .help("Select \(project.name). Right-click to edit name or color.")
-                            .contextMenu { Button("Edit project…") { showNewProject = false; store.error = nil; projectDraft = project } }
+                            .contextMenu { Button("Edit project…") { showNewProject = false; projectDraft = project } }
                     }
                 }
             }.padding(.horizontal, -10)
@@ -165,10 +162,8 @@ struct CalendarView: View {
                         ForEach(days, id: \.self) { day in
                             DayColumn(day: day, hourHeight: hourHeight, entries: entries(on: day),
                                       project: store.project, activeID: store.data.active?.id, now: store.now,
-                                      edit: { entry in
-                                          store.error = nil
-                                          entryDraft = EntryDraft(entry: entry, running: store.data.active?.id == entry.id)
-                                      }, add: addTime)
+                                      edit: { entryDraft = EntryDraft(entry: $0, running: store.data.active?.id == $0.id) },
+                                      add: addTime)
                         }
                     }
                 }.padding(.top, 10).padding(.trailing, 12)
@@ -182,11 +177,10 @@ struct CalendarView: View {
     }
     private func moveWeek(_ offset: Int) { week = calendar.date(byAdding: .day, value: offset * 7, to: week)! }
     private func newProject() {
-        store.error = nil; showNewProject = true
+        showNewProject = true
         projectDraft = Project(name: "", color: Palette.names[store.data.projects.count % Palette.names.count])
     }
     private func addTime(at start: Date) {
-        store.error = nil
         guard start < Date() else { store.error = "Choose a time in the past to add a block."; return }
         let rounded = calendar.date(bySetting: .second, value: 0, of: start) ?? start
         entryDraft = EntryDraft(entry: TimeEntry(projectID: store.data.selectedProjectID, start: rounded,

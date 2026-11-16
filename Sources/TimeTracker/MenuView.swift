@@ -6,7 +6,7 @@ struct MenuView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("TIME TRACKER").font(.system(size: 10, weight: .semibold)).tracking(1.5).foregroundStyle(.secondary)
+                SectionLabel("TIME TRACKER")
                 Spacer()
                 Text(store.isRunning ? "Running" : "Paused").font(.caption).foregroundStyle(.secondary)
             }
@@ -20,10 +20,7 @@ struct MenuView: View {
                     }
                 }.labelsHidden()
             }
-            Button(action: store.toggle) {
-                Label(store.isRunning ? "Pause timer" : "Start timer", systemImage: store.isRunning ? "pause.fill" : "play.fill")
-                    .frame(maxWidth: .infinity).padding(.vertical, 5)
-            }.buttonStyle(.borderedProminent).tint(Palette.color(store.selectedProject.color)).controlSize(.large)
+            TimerButton()
             if let error = store.error {
                 Text(error).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             } else if let notice = store.notice {

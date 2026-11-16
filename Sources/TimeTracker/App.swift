@@ -92,9 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc private func togglePopover() {
         if popover.isShown { popover.performClose(nil); return }
         store.refresh()
-        guard let button = statusItem.button else { return }
-        popover.contentSize = menuSize()
-        showPopover(below: button)
+        showPopover()
         popover.contentViewController?.view.window?.makeKey()
         // As a menu bar accessory the app often is not active, so .transient alone
         // misses clicks in other apps; close on any click outside the app instead.
@@ -103,19 +101,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         }
     }
 
-    /// Anchors to the status item's full-height window rather than the button, which is
-    /// shorter than the menu bar on notched displays and would put the arrow inside it.
-    private func showPopover(below button: NSStatusBarButton) {
-        let anchor = button.window?.contentView ?? button
+    /// Sizes the popover to its content, then shows or re-anchors it. Anchors to the status
+    /// item's full-height window rather than the button, which is shorter than the menu bar
+    /// on notched displays and would put the arrow inside it.
+    private func showPopover() {
+        guard let button = statusItem.button, let anchor = button.window?.contentView else { return }
+        popover.contentSize = menuSize()
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
     }
 
     private func fitPopover() {
-        guard popover.isShown, let button = statusItem.button else { return }
-        let size = menuSize()
-        guard size != popover.contentSize else { return }
-        popover.contentSize = size
-        showPopover(below: button)
+        if popover.isShown && menuSize() != popover.contentSize { showPopover() }
     }
 
     func popoverDidClose(_ notification: Notification) {

@@ -207,22 +207,38 @@ final class TrackerStore: ObservableObject {
 }
 
 enum Palette {
-    static let names = ["blue", "purple", "green", "orange", "pink", "teal", "red", "indigo"]
-    static func color(_ name: String) -> Color {
-        switch name {
-        case "purple": return Color(red: 0.53, green: 0.38, blue: 0.83)
-        case "green": return Color(red: 0.23, green: 0.59, blue: 0.41)
-        case "orange": return Color(red: 0.85, green: 0.48, blue: 0.20)
-        case "pink": return Color(red: 0.79, green: 0.34, blue: 0.58)
-        case "teal": return Color(red: 0.16, green: 0.58, blue: 0.61)
-        case "red": return Color(red: 0.79, green: 0.32, blue: 0.31)
-        case "indigo": return Color(red: 0.37, green: 0.42, blue: 0.72)
-        default: return Color(red: 0.25, green: 0.49, blue: 0.85)
-        }
-    }
+    /// Project colors in picker order; unknown names fall back to the first.
+    private static let colors: [(name: String, color: Color)] = [
+        ("blue", Color(red: 0.25, green: 0.49, blue: 0.85)),
+        ("purple", Color(red: 0.53, green: 0.38, blue: 0.83)),
+        ("green", Color(red: 0.23, green: 0.59, blue: 0.41)),
+        ("orange", Color(red: 0.85, green: 0.48, blue: 0.20)),
+        ("pink", Color(red: 0.79, green: 0.34, blue: 0.58)),
+        ("teal", Color(red: 0.16, green: 0.58, blue: 0.61)),
+        ("red", Color(red: 0.79, green: 0.32, blue: 0.31)),
+        ("indigo", Color(red: 0.37, green: 0.42, blue: 0.72)),
+    ]
+    static let names = colors.map(\.name)
+    static func color(_ name: String) -> Color { (colors.first { $0.name == name } ?? colors[0]).color }
 }
 
 struct ProjectDot: View {
     let project: Project
     var body: some View { Circle().fill(Palette.color(project.color)).frame(width: 9, height: 9).accessibilityHidden(true) }
+}
+
+struct SectionLabel: View {
+    let title: String
+    init(_ title: String) { self.title = title }
+    var body: some View { Text(title).font(.system(size: 10, weight: .semibold)).tracking(1.5).foregroundStyle(.secondary) }
+}
+
+struct TimerButton: View {
+    @EnvironmentObject private var store: TrackerStore
+    var body: some View {
+        Button(action: store.toggle) {
+            Label(store.isRunning ? "Pause timer" : "Start timer", systemImage: store.isRunning ? "pause.fill" : "play.fill")
+                .frame(maxWidth: .infinity).padding(.vertical, 5)
+        }.buttonStyle(.borderedProminent).tint(Palette.color(store.selectedProject.color)).controlSize(.large)
+    }
 }

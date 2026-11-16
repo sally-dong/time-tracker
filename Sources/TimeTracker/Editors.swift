@@ -44,13 +44,14 @@ struct EntryEditor: View {
                     Button("Delete", role: .destructive) { confirmDelete = true }
                 }
                 Spacer()
-                Button("Cancel") { store.error = nil; dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(draft.running ? "Save & pause" : "Save") {
                     let entry = TimeEntry(id: draft.id, projectID: draft.projectID, start: draft.start, end: draft.end)
-                    if store.save(entry) { store.error = nil; dismiss() }
+                    if store.save(entry) { dismiss() }
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }.padding(28).frame(width: 440)
+        .onDisappear { store.error = nil }
         .alert("Delete this time block?", isPresented: $confirmDelete) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) { if store.delete(draft.id) { dismiss() } }
@@ -82,12 +83,12 @@ struct ProjectEditor: View {
             if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("Cancel") { store.error = nil; dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(isNew ? "Create project" : "Save") {
-                    if store.save(project) { store.error = nil; dismiss() }
+                    if store.save(project) { dismiss() }
                 }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                     .disabled(project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-        }.padding(28).frame(width: 360).onAppear { nameFocused = true }
+        }.padding(28).frame(width: 360).onAppear { nameFocused = true }.onDisappear { store.error = nil }
     }
 }
